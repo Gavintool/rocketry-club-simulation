@@ -1,4 +1,5 @@
 import * as THREE from './vendor/three.module.min.js';
+import {readOrk} from './ork-import.js';
 const worker = new Worker(new URL('./simulation-worker.js', import.meta.url), {type:'module'});
 const pending = new Map();
 worker.onmessage = ({data}) => {const task=pending.get(data.id);if(!task)return;pending.delete(data.id);data.error?task.reject(Error(data.error)):task.resolve(data.result);};
@@ -7,7 +8,7 @@ function calculate(id,parameters){return new Promise((resolve,reject)=>{pending.
 
 const $ = id => document.getElementById(id);
 const canvas=$('scene'), form=$('controls');
-let result=null, elapsed=0, playing=false, lastTime=0, requestID=0;
+let result=null, elapsed=0, playing=false, lastTime=0, requestID=0, importedDesign=null;
 let azimuth=.35, elevation=.42, zoom=1, dragging=null;
 let renderer;
 try { renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:false}); }
@@ -44,6 +45,22 @@ function mesh(geometry,material,parent=rocket){const m=new THREE.Mesh(geometry,m
 function buildRocket(p){
  clearGroup(rocket);clearGroup(recovery);cords=[];modelLength=p.length;diameter=p.diameter;
  const L=p.length,r=p.diameter/2,cone=L*.22,body=L-cone;
+ if(importedDesign){
+  const model=importedDesign,axial=L/model.length,radial=p.diameter/model.diameter;
+  for(const part of model.parts){
+   const top=part.topRadius*radial,bottom=part.bottomRadius*radial,h=part.length*axial;
+   let geom;
+   if(part.type==='nosecone'){
+    const points=[];for(let i=0;i<=24;i++){let f=i/24,profile=part.shape==='conical'?f:Math.sqrt(Math.max(0,1-(1-f)*(1-f)));points.push(new THREE.Vector2(bottom*profile, h/2-f*h));}
+    points.reverse();geom=new THREE.LatheGeometry(points,48);
+   }else geom=new THREE.CylinderGeometry(top,bottom,h,48);
+   const shell=mesh(geom,part.type==='nosecone'?darkBlue:blue);shell.position.y=L/2-(part.start+part.length/2)*axial;
+  }
+  for(const fin of model.fins){
+   const shape=new THREE.Shape();fin.points.forEach((pt,i)=>{const x=(fin.radius+pt[1])*radial,y=L/2-(fin.start+pt[0])*axial;i?shape.lineTo(x,y):shape.moveTo(x,y)});shape.closePath();
+   for(let i=0;i<fin.count;i++){const f=mesh(new THREE.ExtrudeGeometry(shape,{depth:Math.max(.0005,fin.thickness*radial),bevelEnabled:false}),darkBlue);f.rotation.y=fin.rotation+i*Math.PI*2/fin.count;}
+  }
+ }else{
  bodyMesh=mesh(new THREE.CylinderGeometry(r,r,body,48),blue);bodyMesh.position.y=-cone/2;
  const nose=mesh(new THREE.ConeGeometry(r,cone,48),darkBlue);nose.position.y=L/2-cone/2;
  const nozzle=mesh(new THREE.CylinderGeometry(r*.6,r*.85,L*.035,24),black);nozzle.position.y=-L/2+.01*L;
@@ -53,6 +70,9 @@ function buildRocket(p){
  const faceCanvas=document.createElement('canvas');faceCanvas.width=256;faceCanvas.height=256;const ctx=faceCanvas.getContext('2d');ctx.fillStyle='#092f4c';for(const x of [75,181]){ctx.beginPath();ctx.arc(x,83,13,0,Math.PI*2);ctx.fill();}ctx.beginPath();ctx.arc(128,127,61,.18,Math.PI-.18);ctx.lineWidth=12;ctx.lineCap='round';ctx.strokeStyle='#092f4c';ctx.stroke();
  const texture=new THREE.CanvasTexture(faceCanvas);texture.colorSpace=THREE.SRGBColorSpace;
  const face=mesh(new THREE.CylinderGeometry(r*1.02,r*1.02,r*2.4,48,1,true,-.75,1.5),new THREE.MeshBasicMaterial({map:texture,transparent:true,depthWrite:false,side:THREE.DoubleSide}));face.position.y=L*.01;
+ }
+ if(importedDesign){const nozzle=mesh(new THREE.CylinderGeometry(r*.6,r*.85,L*.035,24),black);nozzle.position.y=-L/2+.01*L;}
+ // The imported geometry is visual only; the solver uses its overall length and diameter.
  flame=mesh(new THREE.ConeGeometry(r*.7,L*.28,16),new THREE.MeshBasicMaterial({color:'#ffb43f',transparent:true,opacity:.88}));flame.rotation.x=Math.PI;flame.position.y=-L*.64;
  canopy=mesh(new THREE.SphereGeometry(p.chute_diameter/2,32,16,0,Math.PI*2,0,Math.PI/2),new THREE.MeshStandardMaterial({color:'#f1b546',side:THREE.DoubleSide,roughness:.8}),recovery);
  for(let i=0;i<8;i++){const line=new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]),new THREE.LineBasicMaterial({color:'#eee8dc'}));recovery.add(line);cords.push(line);}
@@ -84,6 +104,23 @@ new ResizeObserver(resize).observe(canvas);
 canvas.addEventListener('pointerdown',e=>{dragging={x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);});canvas.addEventListener('pointermove',e=>{if(!dragging)return;azimuth-=(e.clientX-dragging.x)*.008;elevation=Math.max(.05,Math.min(1.4,elevation+(e.clientY-dragging.y)*.006));dragging={x:e.clientX,y:e.clientY};});canvas.addEventListener('pointerup',()=>dragging=null);canvas.addEventListener('pointercancel',()=>dragging=null);canvas.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(.5,Math.min(20,zoom*Math.exp(e.deltaY*.001)));},{passive:false});
 $('reset').onclick=()=>{azimuth=.35;elevation=.42;zoom=1;};$('camera').onchange=()=>zoom=1;
 $('play').onclick=()=>{if(!result)return;if(playing){pause();return;}if(elapsed>=result.flight_time_s)elapsed=0;playing=true;$('play').textContent='Pause';};$('scrub').oninput=()=>{pause();if(result)elapsed=Number($('scrub').value)/1000*result.flight_time_s;};
-form.addEventListener('submit',async e=>{e.preventDefault();pause();const id=++requestID;$('error').textContent='';$('simulate').disabled=true;const parameters=Object.fromEntries([...new FormData(form)].filter(([key])=>key!=='recovery').map(([key,value])=>[key,Number(value)]));parameters.recovery=form.elements.recovery.checked;try{const data=await calculate(id,parameters);if(id!==requestID)return;result=data;elapsed=0;zoom=1;buildRocket(data.parameters);$('play').disabled=false;$('apogee').textContent=data.apogee_m.toFixed(1)+' m';$('duration').textContent=data.flight_time_s.toFixed(1)+' s';$('landing').textContent=data.landing_speed_m_s.toFixed(1)+' m/s';$('range').textContent=data.downrange_m.toFixed(1)+' m';$('events').replaceChildren();for(const event of [{name:'Launch',time:0},{name:'Burnout',time:data.parameters.burn_time},...data.events]){if(event.time>data.flight_time_s)continue;const b=document.createElement('button');b.textContent=event.name;b.onclick=()=>{pause();elapsed=event.time;};$('events').append(b);}resize();updateScene();}catch(e){$('error').textContent=e.message+' Previous valid flight remains displayed.';}finally{if(id===requestID)$('simulate').disabled=false;}});
+$('ork-file').addEventListener('change',async event=>{
+ const file=event.target.files?.[0];if(!file)return;
+ const status=$('ork-status');status.textContent='Reading design…';
+ try{
+  const model=await readOrk(file);
+  importedDesign=model;
+  form.elements.namedItem('length').value=Number(model.length.toFixed(6));
+  form.elements.namedItem('diameter').value=Number(model.diameter.toFixed(6));
+  if(model.parachute!=null){form.elements.namedItem('chute_diameter').value=model.parachute;form.elements.namedItem('recovery').checked=true;}
+  else if(!model.hasParachute)form.elements.namedItem('recovery').checked=false;
+  $('ork-clear').hidden=false;
+  status.textContent=`${model.name}: imported ${model.parts.length} body components and ${model.fins.length} fin sets. ${model.motorName?'Motor listed: '+model.motorName+'. ':''}Review mass, motor thrust and burn time, stability and drag; these are not imported. ${model.warnings.join(' ')}`;
+  if(form.reportValidity())form.requestSubmit();else status.textContent+=' Fix any invalid inputs and select Simulate flight.';
+ }catch(e){status.textContent='Import failed: '+e.message;}
+ event.target.value='';
+});
+$('ork-clear').addEventListener('click',()=>{importedDesign=null;$('ork-clear').hidden=true;$('ork-status').textContent='No design imported. Current numeric inputs were kept.';if(form.reportValidity())form.requestSubmit();});
+form.addEventListener('submit',async e=>{e.preventDefault();pause();const id=++requestID;$('error').textContent='';$('simulate').disabled=true;const parameters=Object.fromEntries([...new FormData(form)].filter(([key])=>key!=='recovery').map(([key,value])=>[key,Number(value)]));parameters.recovery=form.elements.namedItem('recovery').checked;try{const data=await calculate(id,parameters);if(id!==requestID)return;result=data;elapsed=0;zoom=1;buildRocket(data.parameters);$('play').disabled=false;$('apogee').textContent=data.apogee_m.toFixed(1)+' m';$('duration').textContent=data.flight_time_s.toFixed(1)+' s';$('landing').textContent=data.landing_speed_m_s.toFixed(1)+' m/s';$('range').textContent=data.downrange_m.toFixed(1)+' m';$('events').replaceChildren();for(const event of [{name:'Launch',time:0},{name:'Burnout',time:data.parameters.burn_time},...data.events]){if(event.time>data.flight_time_s)continue;const b=document.createElement('button');b.textContent=event.name;b.onclick=()=>{pause();elapsed=event.time;};$('events').append(b);}resize();updateScene();}catch(e){$('error').textContent=e.message+' Previous valid flight remains displayed.';}finally{if(id===requestID)$('simulate').disabled=false;}});
 function animate(now){const delta=lastTime?Math.min(.1,(now-lastTime)/1000):0;lastTime=now;if(playing&&result){elapsed=Math.min(result.flight_time_s,elapsed+delta*Number($('speed').value));if(elapsed>=result.flight_time_s)pause();}updateScene();renderer.render(scene,camera);requestAnimationFrame(animate);}
 resize();requestAnimationFrame(animate);form.requestSubmit();

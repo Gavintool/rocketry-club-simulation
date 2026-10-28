@@ -2,5 +2,11 @@
   "name": "rocketry-club-simulation",
   "private": true,
   "type": "module",
-  "scripts": {"test": "python3 -m unittest discover -s tests -v"}
+  "scripts": {
+    "test": "python3 -m unittest discover -s tests -v && node tests/test_ork.mjs"
+  },
+  "devDependencies": {
+    "jszip": "3.10.1",
+    "xml-js": "1.6.11"
+  }
 }

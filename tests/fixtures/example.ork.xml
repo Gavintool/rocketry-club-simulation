@@ -1,0 +1,5 @@
+<?xml version="1.0"?><openrocket version="1.10"><rocket><name>Test rocket</name><subcomponents><stage><subcomponents>
+<nosecone><length>0.12</length><shape>ogive</shape><aftradius>auto 0.0126</aftradius></nosecone>
+<bodytube><length>0.15</length><radius>0.0126</radius><subcomponents><parachute><diameter>0.3</diameter></parachute></subcomponents></bodytube>
+<bodytube><length>0.03</length><radius>auto 0.0126</radius><motormount><motor><manufacturer>Estes</manufacturer><designation>B6</designation></motor></motormount><subcomponents><freeformfinset><fincount>4</fincount><thickness>0.003</thickness><axialoffset method="bottom">0</axialoffset><finpoints><point x="0" y="0"/><point x="0.02" y="0.03"/><point x="0.03" y="0"/></finpoints></freeformfinset></subcomponents></bodytube>
+</subcomponents></stage></subcomponents></rocket></openrocket>

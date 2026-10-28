@@ -49,3 +49,11 @@ The website runs entirely in the browser, including the flight calculation in a 
 After pushing, open **Settings → Pages**, choose **Deploy from a branch**, select **main / (root)**, and save. GitHub Pages requires a public repository on GitHub Free; paid plans may support a private source repository. The site itself is intended to be public.
 
 `simulation.js` is the browser implementation and `simulation.py` remains the reference command-line implementation. Run `python3 -m unittest discover -s tests -v` with Node.js installed to include the cross-language parity checks.
+
+## Import an OpenRocket design
+
+Choose an `.ork` file using **OpenRocket design** in the controls. ZIP-based designs with a root `rocket.ork` XML entry and legacy plain XML and gzip files are supported. The design is read in your browser and is not uploaded.
+
+The first stage’s nose cone, body tubes, transitions, freeform and trapezoidal fins are approximated in the 3D view. The overall length and maximum body diameter update the flight model; the first supported parachute diameter updates recovery. If you edit length or diameter, the imported mesh scales to match. Other stages, components and exact nose profiles may not be represented. An imported motor’s name may be shown, but its curve, motor mass, rocket mass, drag and stability are not calculated or imported. **Enter or verify these values yourself** before simulating. This remains a simplified educational model, not OpenRocket’s flight solver.
+
+To run import tests, use `npm install` followed by `npm test` (Node.js and Python are required). JSZip 3.10.1 is included locally under its MIT/GPL dual license; see `vendor/JSZIP-LICENSE.md`.

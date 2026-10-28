@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parent
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         url = urlparse(self.path)
-        if url.path in ('/', '/index.html', '/visualizer.js', '/visualizer.css', '/simulation.js', '/simulation-worker.js', '/vendor/three.module.min.js', '/vendor/three.core.min.js'):
+        if url.path in ('/', '/index.html', '/visualizer.js', '/visualizer.css', '/simulation.js', '/simulation-worker.js', '/ork-import.js', '/vendor/jszip.min.js', '/vendor/three.module.min.js', '/vendor/three.core.min.js'):
             filename = 'index.html' if url.path == '/' else url.path.lstrip('/')
             data = (ROOT / filename).read_bytes()
             self.send_response(200)
