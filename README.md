@@ -1,19 +1,51 @@
-# Rocketry Club Simulation
+# Rocketry Club Flight Lab
 
-A small, dependency-free Python starter that estimates a model rocket’s vertical flight.
+A static, browser-based flight visualizer with a perspective 3D scene, terrain, follow and overview cameras, and a simplified planar rocket model. The blue rocket and smiley face are preserved.
 
-## Run
+## Run locally
 
 ```sh
-python3 simulation.py
-python3 simulation.py --mass 0.5 --thrust 20 --burn-time 1.5
-python3 simulation.py --help
+python3 visualizer.py
 ```
 
-The output reports estimated apogee, maximum speed, and flight time. Mass is in kilograms, thrust in newtons, diameter in meters, and time in seconds.
+Open <http://127.0.0.1:8000>. Select **Simulate flight**, then **Play flight**. Drag to orbit, scroll to zoom, or select **Whole flight** to see the entire path. Event buttons jump to rail exit, burnout, apogee, parachute deployment, and ground contact. The timeline works in either camera mode.
 
-## Model and limitations
+Three.js 0.180.0 is included locally in `vendor/` under its MIT license. No package installation or CDN connection is needed at runtime. A browser with WebGL2 is required. Stop the local server with Ctrl+C.
 
-The model assumes vertical flight, constant thrust during the burn, linearly decreasing propellant mass, constant air density, gravity, and quadratic drag. It ignores wind, stability, launch guides, changing atmospheric conditions, parachutes, and motor thrust curves. The falling rocket is modeled without recovery.
+## Flight model
 
-This is an educational approximation, not a tool for real-world launch or safety decisions.
+The state includes horizontal and vertical position/velocity, pitch angle, and pitch rate. SI units are used. Positive wind and positive launch tilt point towards +x. Altitude is the center of mass above a flat ground plane. The mesh dimensions use the configured body length and diameter; fins and canopy shape are illustrative.
+
+- A 1 m launch rail constrains motion and attitude until rail exit.
+- Thrust follows the evolving rocket axis; propellant mass decreases linearly during the burn.
+- Air-relative velocity drives drag. A normal force at the center of pressure behind the CG creates a pitch moment; rotational velocity at that point supplies aerodynamic damping.
+- The static margin sets the CP-to-CG lever in body diameters, capped at 40% of body length.
+- With recovery enabled, a canopy starts opening 0.4 seconds after detected apogee and inflates over 0.8 seconds. Canopy drag slows the descent. Suspension torque approximates the rocket hanging below the canopy.
+- With recovery disabled, aerodynamic pitch dynamics continue through descent. The default 3 m/s wind case turns nose-down. Exact symmetric, vertical, zero-wind flight can remain nose-up because no perturbation is imposed.
+- Ground contact stops playback at the rocket's conservative bounding extent. Landing speed is the speed at contact; no bounce, crash deformation, or canopy collapse is modeled.
+
+Angle of attack is the unsigned angle between the rocket axis and air-relative velocity, undefined at zero airspeed. A rocket hanging nose-up under a parachute can have a 180-degree AoA while descending; this does not indicate nose-first flight.
+
+## Accuracy limits
+
+This is an educational model, not a validated flight predictor. The normal-force slope (6 per radian), uniform-rod inertia, constant CG/CP, drag coefficient, canopy coefficient (1.5), and suspension torque are estimates. High-AoA forces and opening transients are particularly approximate. The force model is planar, although the view is 3D. It omits roll, structural failure, variable atmosphere, gusts, measured thrust curves, and full six-degree-of-freedom aerodynamics. Use measured rocket/motor data and validated simulation tools for launch planning.
+
+The CG/CP stability principle is described in [NASA Glenn's rocket stability guide](https://www1.grc.nasa.gov/beginners-guide-to-aeronautics/conditions-for-rocket-stability/). This implementation has not been validated or endorsed by NASA.
+
+## Command line and tests
+
+```sh
+python3 simulation.py --wind 3
+python3 simulation.py --wind 3 --no-recovery
+python3 -m unittest discover -s tests -v
+```
+
+Tests cover a vertical no-drag analytical case, mirrored winds, pitch reversal during unrecovered descent, slower parachute landing, ground termination, timestep convergence, and invalid inputs.
+
+## GitHub Pages
+
+The website runs entirely in the browser, including the flight calculation in a Web Worker. No Python backend is needed for hosting. All assets use relative URLs so the site works under the repository path.
+
+After pushing, open **Settings → Pages**, choose **Deploy from a branch**, select **main / (root)**, and save. GitHub Pages requires a public repository on GitHub Free; paid plans may support a private source repository. The site itself is intended to be public.
+
+`simulation.js` is the browser implementation and `simulation.py` remains the reference command-line implementation. Run `python3 -m unittest discover -s tests -v` with Node.js installed to include the cross-language parity checks.

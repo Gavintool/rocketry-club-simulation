@@ -1,0 +1,6 @@
+{
+  "name": "rocketry-club-simulation",
+  "private": true,
+  "type": "module",
+  "scripts": {"test": "python3 -m unittest discover -s tests -v"}
+}
